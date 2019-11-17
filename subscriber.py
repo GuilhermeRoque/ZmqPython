@@ -1,23 +1,34 @@
 import _thread
-import pprint
+from datetime import datetime
+import random
+import socket
 import subprocess
 import threading
 import time
 import zmq
-import random
+import signal
+import sys
+
+
+def signal_handler(signal, frame):
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
 
 
 class Subscriber:
-    def __init__(self, state="idle", id=0, file="", last_ka= 0):
+    def __init__(self, state="ocioso", id=socket.gethostname(), file="", last_ka= 0, cfg=""):
         self.file = file
         self.state = state
         self.id = id
         self.last_ka = last_ka
+        self.cgf = cfg
 
     def __str__(self) -> str:
-        if self.state == "idle":
-            return "id: " + str(self.id) + " state: " + self.state
-        return "id: " + str(self.id) + " state: " + self.state + " file: " + self.file
+        if self.state == "ocioso":
+            return "host: " + str(self.id) + " state: " + str(self.state) + " config: " + str(self.cgf)
+        return "host: " + str(self.id) + " state: " + self.state + " file: " + self.file + " config: " + self.cgf
 
     def __eq__(self, o: object) -> bool:
         return self.id == o.id
@@ -28,71 +39,79 @@ class Subscriber:
 
 def keepalive(socket=None, subscriber=None):
     while True:
-        msg = {"action": "announcement", "state": subscriber.state, "id": subscriber.id, "file": subscriber.file}
+        msg = {"action": "announcement", "state": subscriber.state, "id": subscriber.id, "file": subscriber.file, "cfg": subscriber.cgf}
         socket.send_json(msg)
         msg = socket.recv_json()
-        pprint.pprint(msg)
+        subscriber.cgf = msg["cfg"]
         time.sleep(10)
 
 
 def crack(f_name=None, e=None, subscriber=None, socket=None):
+    print("Começando quebra do arquivo ", f_name)
     #executa o john
-    cmd = "exec john " + f_name
+    cmd = "exec john -i="+subscriber.cgf + " " + f_name
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-
     while True:
         if e.isSet():
+            e.clear()
             p.kill()
-            subscriber.state = "idle"
+            subscriber.state = "ocioso"
+            print("Arquivo quebrado por terceiro.")
             break
         if p.poll() is not None:
-            msg = {"action": "done", "file": f_name, "id": subscriber.id, "status": p.returncode}
+            print("Arquivo quebrado!!")
+            subscriber.state = "ocioso"
+            cmd = "john --show "+f_name
+            p = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            results = p.stdout.decode("utf-8").splitlines()
+            if len(results) >= 2:
+                results = results[:len(results)-2]
+                results = "\n".join(results)
+            else:
+                results = ""
+            msg = {"action": "done", "f_name": f_name, "id": subscriber.id, "status": p.returncode, "results": results, "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")}
             socket.send_json(msg)
-            msg = socket.recv_json()
-            pprint.pprint(msg)
-            subscriber.state = "idle"
+            socket.recv_json()
             break
-        time.sleep(5)
 
 
 def main():
-    subscriber_id = random.randrange(1, 1000)
-    print("I am subscriber #%s" % subscriber_id)
+    ipAddr = input("Publisher IP: ")
 
     context = zmq.Context()
 
+
     # subscribe to all messages of the publisher socket
     subscriber = context.socket(zmq.SUB)
-    subscriber.connect("tcp://127.0.0.1:5561")
+    subscriber.connect("tcp://" + ipAddr + ":5561")
     subscriber.setsockopt(zmq.SUBSCRIBE, b'')
 
     time.sleep(1)
-
     # sincronize with publisher
     syncclient = context.socket(zmq.REQ)
-    syncclient.connect("tcp://127.0.0.1:5562")
+    syncclient.connect("tcp://" + ipAddr + ":5562")
 
-    s = Subscriber(id=subscriber_id)
+
+    s = Subscriber(id = str(random.randrange(0, 1000)))
     _thread.start_new_thread(keepalive, (syncclient, s,))
     e = threading.Event()
-
     while True:
         msg = subscriber.recv_json()
         if "action" in msg:
-            if msg["action"] == "crack" and s.state == "idle":
+            if msg["action"] == "crack" and s.state == "ocioso":
                 #cria o arquivo
                 f_name = msg["f_name"]
                 s.file = f_name
-                f = open(f_name, "a+")
+                f = open(f_name, "w")
                 f.write(msg["file"])
                 f.close()
                 _thread.start_new_thread(crack, (f_name, e, s, syncclient,))
 
                 #muda o estado do subscriber
-                s.state = "working"
-            elif msg["action"] == "stop" and s.state == "working":
+                s.state = "trabalhando"
+            elif msg["action"] == "stop" and s.state == "trabalhando":
                 e.set()
-                s.state = "idle"
+                s.state = "ocioso"
                 s.file = ""
 
 

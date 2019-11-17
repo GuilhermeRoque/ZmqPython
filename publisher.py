@@ -1,11 +1,23 @@
 import _thread
+import random
 import time
-
 import zmq
 from subscriber import Subscriber
+import signal
+import sys
+
+
+def signal_handler(signal, frame):
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
 
 subscribers = []
 TIMEOUT = 60
+cfg = ["All5", "All6", "All7", "All8"]
+cfg_applied = []
+files =[]
 
 
 def rcv_signal(unique=None, publisher=None):
@@ -14,18 +26,36 @@ def rcv_signal(unique=None, publisher=None):
         if "action" in msg:
             if msg["action"] == "announcement":
 
-                s = Subscriber(msg["state"], msg["id"], msg["file"], int(time.time()))
+                s = Subscriber(msg["state"], msg["id"], msg["file"], int(time.time()), msg["cfg"])
+                msg = {"status": "ok"}
+
                 if s in subscribers:
                     subscribers.remove(s)
-                subscribers.append(s)
+                else:
+                    print("\nNovo trabalhador " + s.id+" online!\n")
+                    if not len(s.cgf):
+                        if len(cfg):
+                            s.cgf = cfg.pop(0)
+                            cfg_applied.append(s.cgf)
+                        else:
+                            s.cgf = cfg_applied[random.randrange(0, len(cfg_applied))]
 
-                msg = {"status": "ok"}
+                msg["cfg"] = s.cgf
+                subscribers.append(s)
                 unique.send_json(msg)
 
             elif msg["action"] == "done":
-                f_name = msg["file"]
-                msg = {"action": "stop", "file": f_name}
-                publisher.send_json(msg)
+                f_name = msg["f_name"]
+                if f_name in files and len(msg["results"]):
+                    print("\nArquivo de senha " + f_name + " quebrado!\n")
+                    files.remove(f_name)
+                    f = open("resultados.txt", "a+")
+                    f.write(f_name+"\n")
+                    f.write(msg["data"]+"\n")
+                    f.write(msg["results"]+"\n\n")
+                    f.close()
+                    msg = {"action": "stop", "f_name": f_name}
+                    publisher.send_json(msg)
 
                 msg = {"status": "ok"}
                 unique.send_json(msg)
@@ -65,7 +95,7 @@ def main():
                     subscribers_copy.remove(subscribers[count])
                 else:
                     print(subscribers[count])
-                    if subscribers[count].state == "idle":
+                    if subscribers[count].state == "ocioso":
                         ociosos = ociosos + 1
                     else:
                         ativos = ativos + 1
@@ -81,7 +111,8 @@ def main():
 
             names = path.split("/")
             f_name = names[len(names) - 1]
-
+            if f_name not in files:
+                files.append(f_name)
             msg["f_name"] = f_name
             msg["file"] = f.read().decode("utf-8")
             publisher.send_json(msg)
