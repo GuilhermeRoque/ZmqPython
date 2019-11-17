@@ -1,19 +1,23 @@
 import _thread
 import pprint
+import subprocess
+import threading
 import time
-
 import zmq
 import random
 
 
 class Subscriber:
-    def __init__(self, state="idle", id=0, path=""):
-        self.path = path
+    def __init__(self, state="idle", id=0, file="", last_ka= 0):
+        self.file = file
         self.state = state
         self.id = id
+        self.last_ka = last_ka
 
     def __str__(self) -> str:
-        return "ID: " + str(self.id) + " STATE: " + self.state + " FILE: " + self.path
+        if self.state == "idle":
+            return "id: " + str(self.id) + " state: " + self.state
+        return "id: " + str(self.id) + " state: " + self.state + " file: " + self.file
 
     def __eq__(self, o: object) -> bool:
         return self.id == o.id
@@ -24,15 +28,35 @@ class Subscriber:
 
 def keepalive(socket=None, subscriber=None):
     while True:
-        msg = {"action": "announcement", "state": subscriber.path, "id": subscriber.id, "path": subscriber.path}
+        msg = {"action": "announcement", "state": subscriber.state, "id": subscriber.id, "file": subscriber.file}
         socket.send_json(msg)
         msg = socket.recv_json()
         pprint.pprint(msg)
         time.sleep(10)
 
 
+def crack(f_name=None, e=None, subscriber=None, socket=None):
+    #executa o john
+    cmd = "exec john " + f_name
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+
+    while True:
+        if e.isSet():
+            p.kill()
+            subscriber.state = "idle"
+            break
+        if p.poll() is not None:
+            msg = {"action": "done", "file": f_name, "id": subscriber.id, "status": p.returncode}
+            socket.send_json(msg)
+            msg = socket.recv_json()
+            pprint.pprint(msg)
+            subscriber.state = "idle"
+            break
+        time.sleep(5)
+
+
 def main():
-    subscriber_id = random.randrange(1, 10)
+    subscriber_id = random.randrange(1, 1000)
     print("I am subscriber #%s" % subscriber_id)
 
     context = zmq.Context()
@@ -48,16 +72,28 @@ def main():
     syncclient = context.socket(zmq.REQ)
     syncclient.connect("tcp://127.0.0.1:5562")
 
-    s = Subscriber()
+    s = Subscriber(id=subscriber_id)
     _thread.start_new_thread(keepalive, (syncclient, s,))
+    e = threading.Event()
 
     while True:
         msg = subscriber.recv_json()
-        pprint.pprint(msg)
-        result = {"action": "none", "state": "idle"}
-        syncclient.send_json(result)
-        msg = syncclient.recv_json()
-        pprint.pprint(msg)
+        if "action" in msg:
+            if msg["action"] == "crack" and s.state == "idle":
+                #cria o arquivo
+                f_name = msg["f_name"]
+                s.file = f_name
+                f = open(f_name, "a+")
+                f.write(msg["file"])
+                f.close()
+                _thread.start_new_thread(crack, (f_name, e, s, syncclient,))
+
+                #muda o estado do subscriber
+                s.state = "working"
+            elif msg["action"] == "stop" and s.state == "working":
+                e.set()
+                s.state = "idle"
+                s.file = ""
 
 
 if __name__ == '__main__':

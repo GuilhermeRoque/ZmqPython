@@ -4,23 +4,27 @@ import time
 import zmq
 from subscriber import Subscriber
 
-subscribers = {}
+subscribers = []
 TIMEOUT = 60
+
 
 def rcv_signal(unique=None, publisher=None):
     while True:
         msg = unique.recv_json()
         if "action" in msg:
             if msg["action"] == "announcement":
-                subscriber = Subscriber(msg["state"], msg["id"], msg["path"])
-                if subscriber not in subscribers:
-                    subscribers[subscriber] = int(time.time())
+
+                s = Subscriber(msg["state"], msg["id"], msg["file"], int(time.time()))
+                if s in subscribers:
+                    subscribers.remove(s)
+                subscribers.append(s)
+
                 msg = {"status": "ok"}
                 unique.send_json(msg)
 
             elif msg["action"] == "done":
-                path = msg["path"]
-                msg = {"action": "stop", "file": path}
+                f_name = msg["file"]
+                msg = {"action": "stop", "file": f_name}
                 publisher.send_json(msg)
 
                 msg = {"status": "ok"}
@@ -50,24 +54,36 @@ def main():
             """\n\nEscolha uma opção
             (1) Ver status
             (2) Quebrar arquivo de senha
-            (3) Send msg
             :""")
         if opcao == '1':
             agora = int(time.time())
-            for subscriber in list(subscribers):
-                if agora - subscribers[subscriber] > TIMEOUT:
-                    subscribers.pop(subscriber)
+            ativos = 0
+            ociosos = 0
+            subscribers_copy = subscribers.copy()
+            for count in range(len(subscribers)):
+                if agora - subscribers[count].last_ka > TIMEOUT:
+                    subscribers_copy.remove(subscribers[count])
                 else:
-                    print(subscriber)
+                    print(subscribers[count])
+                    if subscribers[count].state == "idle":
+                        ociosos = ociosos + 1
+                    else:
+                        ativos = ativos + 1
+            subscribers.clear()
+            subscribers[:] = subscribers_copy[:]
+            print("Total trabalhadores: ", len(subscribers))
+            print("Total ativos: ", ativos)
+            print("Total ociosos: ", ociosos)
         elif opcao == '2':
             msg = {"action": "crack"}
             path = input("file path: ")
             f = open(path, "rb")
-            msg["file"] = f.read().decode("utf-8")
-            publisher.send_json(msg)
 
-        elif opcao == '3':
-            msg = {"msg": input("msg: ")}
+            names = path.split("/")
+            f_name = names[len(names) - 1]
+
+            msg["f_name"] = f_name
+            msg["file"] = f.read().decode("utf-8")
             publisher.send_json(msg)
 
 
