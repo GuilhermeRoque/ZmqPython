@@ -14,10 +14,9 @@ def signal_handler(signal, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 subscribers = []
-TIMEOUT = 60
+TIMEOUT = 20
 cfg = ["All5", "All6", "All7", "All8"]
-cfg_applied = []
-files =[]
+files = []
 
 
 def rcv_signal(unique=None, publisher=None):
@@ -33,14 +32,11 @@ def rcv_signal(unique=None, publisher=None):
                     subscribers.remove(s)
                 else:
                     print("\nNovo trabalhador " + s.id+" online!\n")
-                    if not len(s.cgf):
+                    if not len(s.cfg):
                         if len(cfg):
-                            s.cgf = cfg.pop(0)
-                            cfg_applied.append(s.cgf)
-                        else:
-                            s.cgf = cfg_applied[random.randrange(0, len(cfg_applied))]
+                            s.cfg = cfg.pop(0)
 
-                msg["cfg"] = s.cgf
+                msg["cfg"] = s.cfg
                 subscribers.append(s)
                 unique.send_json(msg)
 
@@ -83,7 +79,8 @@ def main():
         opcao = input(
             """\n\nEscolha uma opção
             (1) Ver status
-            (2) Quebrar arquivo de senha
+            (2) Quebrar arquivo
+            (3) Parar quebra de arquivo
             :""")
         if opcao == '1':
             agora = int(time.time())
@@ -91,18 +88,21 @@ def main():
             ociosos = 0
             subscribers_copy = subscribers.copy()
             for count in range(len(subscribers)):
-                if agora - subscribers[count].last_ka > TIMEOUT:
-                    subscribers_copy.remove(subscribers[count])
+                sub = subscribers[count]
+                if agora - sub.last_ka > TIMEOUT:
+                    print("\nTrabalhador " + sub.id + " desconectou!\n")
+                    subscribers_copy.remove(sub)
+                    cfg.append(sub.cfg)
                 else:
-                    print(subscribers[count])
-                    if subscribers[count].state == "ocioso":
+                    print(sub)
+                    if sub.state == "ocioso":
                         ociosos = ociosos + 1
                     else:
                         ativos = ativos + 1
             subscribers.clear()
             subscribers[:] = subscribers_copy[:]
-            print("Total trabalhadores: ", len(subscribers))
-            print("Total ativos: ", ativos)
+            print("Total online: ", len(subscribers))
+            print("Total trabalhando: ", ativos)
             print("Total ociosos: ", ociosos)
         elif opcao == '2':
             msg = {"action": "crack"}
@@ -115,6 +115,12 @@ def main():
                 files.append(f_name)
             msg["f_name"] = f_name
             msg["file"] = f.read().decode("utf-8")
+            publisher.send_json(msg)
+        elif opcao == '3':
+            path = input("file: ")
+            names = path.split("/")
+            f_name = names[len(names) - 1]
+            msg = {"action": "stop", "f_name": f_name}
             publisher.send_json(msg)
 
 
