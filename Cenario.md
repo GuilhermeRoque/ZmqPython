@@ -10,6 +10,8 @@
 - Quando um dos escravos terminar o trabalho será exbida uma mensagem na tela ""Arquivo de senha  arquivo.txt  quebrado!"
 
 ### Escravos
+- Instalar "john".
+- Copiar o arquivo john.conf para a pasta .john por padrão está no diretório do usuário.
 - Instalar o especificado em "requirements.txt";
 - Se foi criado um Virtual Enviroment, ativá-lo;
 - Inserir o endereço IP do mestre;
