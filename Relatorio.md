@@ -1,5 +1,5 @@
 
-## Relaório Técnico
+## Relatório
 
 ### ZMQ
 - Abstração da programação direta com sockets;
