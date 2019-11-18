@@ -18,7 +18,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 class Subscriber:
-    def __init__(self, state="ocioso", id=socket.gethostname(), file="", last_ka=0, cfg=""):
+    def __init__(self, state="ocioso", id="", file="", last_ka=0, cfg=""):
         self.file = file
         self.state = state
         self.id = id
@@ -27,8 +27,8 @@ class Subscriber:
 
     def __str__(self) -> str:
         if self.state == "ocioso":
-            return "host: " + str(self.id) + " state: " + str(self.state) + " config: " + str(self.cfg)
-        return "host: " + str(self.id) + " state: " + self.state + " file: " + self.file + " config: " + self.cfg
+            return "Trabalhador: " + str(self.id) + " estado: " + str(self.state) + " config: " + str(self.cfg)
+        return "Trabalhador: " + str(self.id) + " estado: " + self.state + " arquivo: " + self.file + " config: " + self.cfg
 
     def __eq__(self, o: object) -> bool:
         return self.id == o.id
@@ -52,9 +52,9 @@ def crack(f_name=None, e=None, subscriber=None, socket=None):
     # executa o john
     cmd = ""
     if len(subscriber.cfg):
-        cmd = "exec john -i=" + subscriber.cfg + " " + f_name
+        cmd = "exec john -i=" + subscriber.cfg + " " + f_name + " --session="+subscriber.id
     else:
-        cmd = "exec john " + f_name
+        cmd = "exec john " + f_name + " --session="+subscriber.id
     print(cmd)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
     while True:
@@ -101,7 +101,9 @@ def main():
     syncclient = context.socket(zmq.REQ)
     syncclient.connect("tcp://" + ipAddr + ":5562")
 
-    s = Subscriber()
+    trabalhador =socket.gethostname() + "_" + str(random.randrange(1, 1000))
+    print("Eu sou o trabalhador: ",trabalhador)
+    s = Subscriber(id=trabalhador)
     _thread.start_new_thread(keepalive, (syncclient, s,))
     e = threading.Event()
     while True:
