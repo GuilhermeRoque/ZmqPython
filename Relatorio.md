@@ -14,7 +14,7 @@
 #### Mestre
 - Abre um socket TCP na porta 5561 com contexto Publisher para a comunicação publish & subscribe;
 - Abre um socket TCP na porta 5562 com contexto para a comunicação request & reply;
-- Inicia thread para tratamento das mensagens request & reply. Nota: Estas mensagens são utilizadas para receber o status dos escravos e atribuir a configuração a ser utilizada quando for necessário quebras um arquivo. As configuração são distribuídas unicamente do conjunto especificado no arquivo john.conf e quando esgotas o escravo irá executar o john sem configuração alguma;
+- Inicia thread para tratamento das mensagens request & reply. Nota: Estas mensagens são utilizadas para receber o status dos escravos e atribuir a configuração a ser utilizada quando for necessário quebrar um arquivo. As configurações são distribuídas unicamente dentro do conjunto especificado no arquivo john.conf e quando esgotadas o escravo irá executar o john sem configuração alguma;
 - Inicia loop de interface com o usuário para envio de mensagens globais e visualização de status na thread principal;
 
 #### Escravo
