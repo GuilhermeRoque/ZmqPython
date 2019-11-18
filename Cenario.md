@@ -11,7 +11,7 @@
 
 ### Escravos
 - Instalar "john".
-- Copiar o arquivo john.conf para a pasta .john por padrão está no diretório do usuário.
+- Copiar o arquivo john.conf para a pasta .john que por padrão está no diretório do usuário (Ex: /home/user). 
 - Instalar o especificado em "requirements.txt";
 - Se foi criado um Virtual Enviroment, ativá-lo;
 - Inserir o endereço IP do mestre;
